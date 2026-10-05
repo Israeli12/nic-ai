@@ -135,6 +135,23 @@ class VoiceConfig:
 
 
 @dataclass
+class ScheduleConfig:
+    enabled: bool = True
+    store: str = "~/nic-ai/routines.yaml"
+    # How often the runner checks for due routines.
+    tick_seconds: int = 20
+    # Extra lateness allowed after a missed slot, on top of the few minutes
+    # of normal tick delay. 0 means a genuinely missed run is skipped:
+    # locking the phone at 07:00 because 23:00 was missed is worse than
+    # not locking it. Raise it to honour slots after the laptop wakes.
+    catch_up_minutes: int = 0
+    # Run the scheduler alongside these long-running commands.
+    run_with_serve: bool = True
+    run_with_wake: bool = True
+    log: str = "~/nic-ai/routines.log"
+
+
+@dataclass
 class WebConfig:
     enabled: bool = True
     # 0.0.0.0 so your phone can reach it over Wi-Fi.
@@ -152,6 +169,7 @@ class Config:
     laptop: LaptopConfig = field(default_factory=LaptopConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
     web: WebConfig = field(default_factory=WebConfig)
 
 

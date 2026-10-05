@@ -204,6 +204,21 @@ def serve(config: Config) -> int:
         return 1
     session = Session(config)
     handler = make_handler(config, session)
+
+    runner = None
+    if config.schedule.enabled and config.schedule.run_with_serve:
+        from ..schedule import RoutineRunner, RoutineStore
+        from ..config import expand
+
+        store = RoutineStore(expand(config.schedule.store))
+        runner = RoutineRunner(
+            config,
+            store,
+            session.agent.registry,
+            agent_factory=lambda: Agent(config, registry=session.agent.registry),
+            on_event=print,
+        )
+        runner.start()
     httpd = ThreadingHTTPServer((config.web.host, config.web.port), handler)
     where = _local_ip() if config.web.host in {"0.0.0.0", ""} else config.web.host
     print(f"nic-ai web UI: http://{where}:{config.web.port}")
@@ -214,5 +229,7 @@ def serve(config: Config) -> int:
     except KeyboardInterrupt:
         print("\nstopped")
     finally:
+        if runner is not None:
+            runner.stop()
         httpd.server_close()
     return 0

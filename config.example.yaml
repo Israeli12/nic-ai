@@ -85,6 +85,20 @@ voice:
   speaker_threshold: 0
   adapt_voiceprint: false
 
+schedule:
+  # Scheduled routines, e.g. "lock the phone at 11pm".
+  # Create them with: python -m nic schedule add --help, or just ask.
+  enabled: true
+  store: ~/nic-ai/routines.yaml
+  log: ~/nic-ai/routines.log
+  tick_seconds: 20
+  # Extra lateness allowed after a missed slot (laptop asleep), on top of
+  # the few minutes of normal tick delay. 0 skips genuinely missed runs.
+  catch_up_minutes: 0
+  # Run the scheduler inside these long-running commands.
+  run_with_serve: true
+  run_with_wake: true
+
 safety:
   confirm_dangerous_actions: true
   # Tools named here are removed entirely, e.g. [android_call, laptop_power]

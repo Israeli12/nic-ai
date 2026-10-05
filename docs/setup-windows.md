@@ -51,6 +51,7 @@ python -m nic serve         # web UI for your phone
 python -m nic enroll        # record your voiceprint (see docs/voice-id.md)
 python -m nic wake          # always listening, wake word (docs/wake-word.md)
 python -m nic qr            # address + QR for the phone
+python -m nic schedule list # scheduled routines (docs/routines.md)
 python -m nic tools         # what it can actually do
 ```
 
@@ -60,3 +61,6 @@ python -m nic tools         # what it can actually do
 
 Press `Win+R`, run `shell:startup`, and drop a shortcut to `run-nic.bat`
 in the folder that opens.
+
+Scheduled routines only fire while something is running, so if you use
+them, this step is what makes "lock the phone at 11pm" actually happen.

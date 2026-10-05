@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .config import Config
+from .config import Config, expand
 from .llm import ModelReply, OllamaClient, ToolCall
 from .safety import Approver, Guard
 from .tools.registry import ConfirmationRequired, ToolError, ToolRegistry
@@ -23,7 +23,7 @@ Rules:
 - Keep replies short and concrete. The user hears many of them read aloud."""
 
 
-def build_registry(config: Config) -> ToolRegistry:
+def build_registry(config: Config, routine_store=None) -> ToolRegistry:
     """Assemble every enabled tool surface into one registry."""
     from .tools import android, ios, laptop
 
@@ -34,6 +34,14 @@ def build_registry(config: Config) -> ToolRegistry:
         registry.merge(android.build_registry(config))
     if config.ios.enabled:
         registry.merge(ios.build_registry(config))
+    if config.schedule.enabled:
+        from .schedule import RoutineStore
+        from .tools import routines
+
+        store = routine_store or RoutineStore(expand(config.schedule.store))
+        # Routines schedule the device tools, so they see the registry as
+        # it stands before the routine tools themselves are added.
+        registry.merge(routines.build_registry(config, store, registry))
     registry.drop(config.safety.blocked_tools)
     return registry
 

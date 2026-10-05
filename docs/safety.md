@@ -70,6 +70,18 @@ safety:
   blocked_tools: [laptop_power, android_call]
 ```
 
+## Routines run with nobody present
+
+A scheduled routine cannot ask you anything when it fires, so the
+decision is made when it is created: a routine containing a
+confirm-required tool must carry `allow_dangerous: true`, which both the
+CLI and the assistant ask for explicitly. Without it the action is
+skipped and logged rather than run.
+
+`safety.blocked_tools` still wins, in routines as everywhere else, and
+every run is appended to `~/nic-ai/routines.log`. Details:
+[routines.md](routines.md).
+
 ## Shell access
 
 `laptop.allow_shell: true` gives a 4B model the ability to run any command

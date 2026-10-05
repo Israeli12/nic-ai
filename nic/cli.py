@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+import time
 from typing import Any
 
 from .agent import Agent, Step, build_registry
 from .config import load_config
 from .llm import ModelUnavailable, OllamaClient
+from .tools.registry import ToolError
 
 BANNER = "nic-ai - offline assistant. Type 'exit' to quit, 'reset' to clear context."
 
@@ -148,12 +151,30 @@ def cmd_wake(args: argparse.Namespace) -> int:
         speaker=speaker,
         on_event=print,
     )
+
+    runner = None
+    if config.schedule.enabled and config.schedule.run_with_wake:
+        from .schedule import RoutineRunner, RoutineStore
+        from .config import expand as _expand
+
+        runner = RoutineRunner(
+            config,
+            RoutineStore(_expand(config.schedule.store)),
+            agent.registry,
+            agent_factory=lambda: Agent(config, registry=agent.registry),
+            on_event=print,
+            speaker=speaker,
+        )
+        runner.start()
+
     try:
         loop.run()
     except KeyboardInterrupt:
         print("\nstopped")
     finally:
         loop.stop()
+        if runner is not None:
+            runner.stop()
         if loop.source is not None:
             loop.source.close()
     return 0
@@ -205,6 +226,115 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from .web.server import serve
 
     return serve(config)
+
+
+def _routine_parts(config):
+    """Store, registry and runner, sharing one agent factory."""
+    from .schedule import RoutineStore, RoutineRunner
+    from .config import expand as _expand
+
+    store = RoutineStore(_expand(config.schedule.store))
+    registry = build_registry(config, routine_store=store)
+    runner = RoutineRunner(
+        config,
+        store,
+        registry,
+        agent_factory=lambda: Agent(config, registry=registry, approver=None),
+        on_event=print,
+    )
+    return store, registry, runner
+
+
+def cmd_schedule(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    from .schedule import Action, Routine, ScheduleError, parse_schedule, summarise
+
+    store, registry, runner = _routine_parts(config)
+    action = args.schedule_command
+
+    try:
+        if action == "list":
+            lines = summarise(store.all())
+            print("\n".join(lines) if lines else "no routines saved")
+            runner.prime()
+            upcoming = runner.next_due()
+            if upcoming:
+                print(f"\nnext: {upcoming[0]} at {upcoming[1]:%a %d %b %H:%M}")
+            return 0
+
+        if action == "add":
+            schedule = parse_schedule(args.when)
+            tool = registry.get(args.tool)
+            arguments = json.loads(args.arguments) if args.arguments else {}
+            allow = args.allow_dangerous
+            if tool.dangerous and not allow:
+                # The person creating the routine is the only one who can
+                # approve it, because nobody is present when it fires.
+                print(f"'{args.tool}' normally asks for confirmation before running.")
+                print(f"This routine would run it unattended: {schedule.describe()}.")
+                answer = input("allow that? [y/N] ").strip().lower()
+                allow = answer in {"y", "yes"}
+                if not allow:
+                    print("not saved")
+                    return 1
+            routine = Routine(
+                name=args.name,
+                schedule=schedule,
+                actions=[Action(tool=args.tool, arguments=arguments)],
+                allow_dangerous=allow,
+                speak=args.speak,
+            )
+            store.add(routine, replace=args.replace)
+            print(f"saved: {routine.describe()}")
+            due = routine.next_run()
+            if due:
+                print(f"next run: {due:%a %d %b %H:%M}")
+            return 0
+
+        if action == "remove":
+            print(f"removed '{store.remove(args.name).name}'")
+            return 0
+
+        if action in {"enable", "disable"}:
+            routine = store.set_enabled(args.name, action == "enable")
+            print(f"'{routine.name}' is now {'enabled' if routine.enabled else 'disabled'}")
+            return 0
+
+        if action == "run":
+            routine = store.get(args.name)
+            print(runner.run_now(routine))
+            return 0
+
+        if action == "serve":
+            runner.prime()
+            upcoming = runner.next_due()
+            print(
+                f"Routine scheduler running. Next: {upcoming[0]} at {upcoming[1]:%a %d %b %H:%M}"
+                if upcoming
+                else "Routine scheduler running. Nothing scheduled yet."
+            )
+            print("Ctrl+C to stop.")
+            runner.start()
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\nstopped")
+            finally:
+                runner.stop()
+            return 0
+    except ScheduleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except ToolError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"error: --arguments must be JSON ({exc})", file=sys.stderr)
+        return 1
+
+    print("error: unknown schedule command", file=sys.stderr)
+    return 1
 
 
 def cmd_tools(args: argparse.Namespace) -> int:
@@ -307,6 +437,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     else:
         print("  skip no voiceprint enrolled (any voice would be accepted)")
 
+    print("routines:")
+    if not config.schedule.enabled:
+        print("  skip disabled in config")
+    else:
+        from .schedule import RoutineStore, ScheduleError, summarise
+        from .config import expand as _expand2
+
+        try:
+            store = RoutineStore(_expand2(config.schedule.store))
+            routines = store.all()
+            if not routines:
+                print("  ok   none saved (python -m nic schedule add --help)")
+            else:
+                for line in summarise(routines):
+                    print(f"  ok   {line}")
+        except ScheduleError as exc:
+            ok = False
+            print(f"  FAIL {config.schedule.store}: {exc}")
+
     print("web:")
     if not config.web.enabled:
         print("  skip disabled in config")
@@ -359,6 +508,50 @@ def build_parser() -> argparse.ArgumentParser:
 
     qr = subparsers.add_parser("qr", help="Show the web UI address for your phone")
     qr.set_defaults(func=cmd_qr)
+
+    schedule = subparsers.add_parser("schedule", help="Scheduled routines")
+    schedule.set_defaults(func=cmd_schedule, schedule_command="list")
+    schedule_commands = schedule.add_subparsers(dest="schedule_command")
+
+    schedule_commands.add_parser("list", help="Show saved routines").set_defaults(
+        schedule_command="list"
+    )
+
+    add = schedule_commands.add_parser("add", help="Save a routine")
+    add.add_argument("name", help="Short name, e.g. 'night lock'")
+    add.add_argument(
+        "--when", required=True, help="e.g. 'every day at 23:00', 'weekdays at 07:30'"
+    )
+    add.add_argument("--tool", required=True, help="Tool to run (see: python -m nic tools)")
+    add.add_argument("--arguments", default="", help="Tool arguments as JSON")
+    add.add_argument(
+        "--allow-dangerous",
+        action="store_true",
+        help="Permit a confirm-required tool to run unattended",
+    )
+    add.add_argument("--speak", action="store_true", help="Say the result aloud")
+    add.add_argument("--replace", action="store_true", help="Overwrite a routine of the same name")
+    add.set_defaults(schedule_command="add")
+
+    remove = schedule_commands.add_parser("remove", help="Delete a routine")
+    remove.add_argument("name")
+    remove.set_defaults(schedule_command="remove")
+
+    enable = schedule_commands.add_parser("enable", help="Enable a routine")
+    enable.add_argument("name")
+    enable.set_defaults(schedule_command="enable")
+
+    disable = schedule_commands.add_parser("disable", help="Disable a routine")
+    disable.add_argument("name")
+    disable.set_defaults(schedule_command="disable")
+
+    run = schedule_commands.add_parser("run", help="Run a routine now, ignoring its schedule")
+    run.add_argument("name")
+    run.set_defaults(schedule_command="run")
+
+    schedule_commands.add_parser(
+        "serve", help="Run the scheduler in the foreground"
+    ).set_defaults(schedule_command="serve")
 
     tools = subparsers.add_parser("tools", help="List available tools")
     tools.set_defaults(func=cmd_tools)

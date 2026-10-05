@@ -23,6 +23,7 @@ nic> 64 percent, not charging. Phone locked.
 | Phone control (iPhone) | Shortcuts bridge over LAN | the ceiling iOS allows - see below |
 | Voice | faster-whisper (in) + Piper (out) | both CPU, both offline |
 | Wake word | VAD + transcript match, or openWakeWord | hands-free, no cloud |
+| Routines | local scheduler over tool calls | "lock the phone at 11pm", no model needed |
 | Speaker ID | MFCC embedder, or Resemblyzer if installed | acts only on your voice |
 | Interfaces | terminal, voice, installable phone app | pick per moment |
 
@@ -67,6 +68,7 @@ python -m nic wake            # always listening: wake word + your voice only
 python -m nic listen          # push-to-talk voice conversation
 python -m nic serve           # web UI on your Wi-Fi, for the phone
 python -m nic qr              # address + QR code to scan from the phone
+python -m nic schedule list   # scheduled routines
 python -m nic tools           # list every capability
 python -m nic doctor          # diagnose the setup
 ```
@@ -111,6 +113,34 @@ your family, or a podcast. A recording of your voice will pass it. Keep
 confirmations on and do not treat voice as permission -
 [docs/voice-id.md](docs/voice-id.md) is honest about the limits.
 
+## Scheduled routines
+
+> **"Nic, lock my phone every night at 11."**
+
+```powershell
+python -m nic schedule add "night lock" --when "11pm" --tool android_lock
+python -m nic schedule add "morning check" --when "weekdays at 07:30" --tool android_status
+python -m nic schedule list
+```
+
+It understands `11pm`, `every day at 23:00`, `weekdays at 07:30`,
+`mon,fri at 18:00`, `every 30 minutes`, and `on 2026-12-25 at 08:00`.
+Routines are tool calls, so they fire without waking the model; they can
+carry a prompt instead when something needs judgement. They run inside
+`nic serve` and `nic wake`, or on their own with `nic schedule serve`.
+
+Two decisions worth knowing about:
+
+- **Nobody is present at 11pm to approve anything**, so a routine
+  containing a confirm-required tool must be given `allow_dangerous` when
+  it is created - the CLI and the assistant both ask first. Otherwise
+  that action is skipped and logged.
+- **A missed slot is skipped, not fired late.** If the laptop was asleep
+  at 23:00, locking your phone at 07:00 is worse than not locking it.
+  `schedule.catch_up_minutes` changes that if you disagree.
+
+Details: [docs/routines.md](docs/routines.md).
+
 ## On your phone's home screen
 
 `python -m nic serve` prints a LAN address like
@@ -131,7 +161,9 @@ Details: [docs/phone-shortcut.md](docs/phone-shortcut.md).
 ## Safety
 
 - Dangerous tools (power, lock, calls, shell) ask before running - by
-  prompt, by Allow/Cancel panel, or by spoken yes in wake mode.
+  prompt, by Allow/Cancel panel, or by spoken yes in wake mode. In a
+  scheduled routine, where nobody can answer, they need explicit
+  permission at creation time or they are skipped.
 - `safety.blocked_tools` removes capabilities entirely.
 - Shell access is off unless you set `laptop.allow_shell: true`.
 - Only allowlisted apps can be launched.
@@ -171,15 +203,17 @@ nic/
   voiceid.py      voiceprints: MFCC and Resemblyzer embedders
   enrollment.py   interactive 'nic enroll'
   wake.py         always-listening loop and wake-word matching
-  cli.py          chat / ask / enroll / wake / listen / serve / qr / tools / doctor
+  schedule.py     routine parsing, storage, and the scheduler thread
+  cli.py          chat / ask / enroll / wake / listen / serve / qr / schedule / tools / doctor
   tools/
     registry.py   tool decorator and JSON schemas
     laptop.py     Windows control
     android.py    ADB control
     ios.py        Shortcuts bridge
+    routines.py   routine management, exposed to the model
   web/            stdlib HTTP server + installable phone app (PWA)
-docs/             setup, android, ios, voice, wake word, voice id, phone, safety
-tests/            96 tests, no device, mic or model required
+docs/             setup, android, ios, voice, wake word, voice id, phone, routines, safety
+tests/            158 tests, no device, mic or model required
 ```
 
 ## Tests
