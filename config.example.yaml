@@ -1,0 +1,68 @@
+# Copy this file to config.yaml and edit. Everything here stays on your machine.
+
+model:
+  # Ollama on loopback - nothing leaves the laptop.
+  host: http://127.0.0.1:11434
+  # Good CPU-only picks, smallest first:
+  #   qwen3:4b          ~3 GB RAM, fast, solid tool calling  <- default
+  #   llama3.1:8b       ~6 GB RAM, better reasoning, slower
+  #   qwen3:8b          ~6 GB RAM, strong tool calling
+  name: qwen3:4b
+  context_tokens: 8192
+  temperature: 0.2
+  max_tool_iterations: 8
+
+laptop:
+  enabled: true
+  # Leave false unless you want the model to run arbitrary shell commands.
+  allow_shell: false
+  app_allowlist:
+    - notepad
+    - calc
+    - explorer
+    - mspaint
+    - code
+    - chrome
+    - msedge
+    - firefox
+    - spotify
+  screenshot_dir: ~/nic-ai/screenshots
+
+android:
+  enabled: true
+  # Full path if adb is not on PATH, e.g. C:\platform-tools\adb.exe
+  adb_path: adb
+  # Leave blank when only one device is attached.
+  serial: ""
+  command_timeout_seconds: 30
+
+ios:
+  # iOS has no offline control API; this drives Shortcuts over your LAN.
+  # See docs/ios.md before enabling.
+  enabled: false
+  bridge_url: ""
+  shared_secret: ""
+
+voice:
+  enabled: false
+  # tiny.en is fastest, base.en is the sweet spot on CPU, small.en is slow.
+  stt_model: base.en
+  stt_compute_type: int8
+  # Download a voice from https://github.com/rhasspy/piper and point here.
+  piper_voice: ""
+  piper_path: piper
+  wake_word: nic
+
+safety:
+  confirm_dangerous_actions: true
+  # Tools named here are removed entirely, e.g. [android_call, laptop_power]
+  blocked_tools: []
+  audit_log: ~/nic-ai/audit.log
+
+web:
+  enabled: true
+  host: 0.0.0.0
+  port: 8713
+  # Required. Generate one with:
+  #   python -c "import secrets; print(secrets.token_urlsafe(24))"
+  access_token: ""

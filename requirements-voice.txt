@@ -1,0 +1,4 @@
+# Offline speech-to-text and audio I/O. CPU-only, no network at runtime.
+faster-whisper>=1.0
+sounddevice>=0.4
+soundfile>=0.12

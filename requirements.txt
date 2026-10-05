@@ -1,0 +1,7 @@
+# Core (required)
+pyyaml>=6.0
+
+# Laptop screenshots
+pillow>=10.0
+
+# Offline voice (optional: pip install -r requirements-voice.txt)

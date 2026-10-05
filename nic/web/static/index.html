@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<title>nic-ai</title>
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+<header>
+  <h1>nic</h1>
+  <button id="reset" type="button" class="ghost">Clear</button>
+</header>
+
+<main id="log" aria-live="polite">
+  <div class="msg system">Offline assistant. Ask it to do something on your laptop or phone.</div>
+</main>
+
+<div id="pending" class="pending" hidden>
+  <p id="pending-summary"></p>
+  <div class="pending-actions">
+    <button id="approve" type="button">Allow</button>
+    <button id="reject" type="button" class="ghost">Cancel</button>
+  </div>
+</div>
+
+<form id="composer">
+  <input id="token" type="password" placeholder="Access token" autocomplete="current-password" />
+  <div class="row">
+    <input id="message" type="text" placeholder="Lock my phone" autocomplete="off" />
+    <button id="send" type="submit">Send</button>
+  </div>
+</form>
+
+<script src="/app.js"></script>
+</body>
+</html>
