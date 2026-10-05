@@ -50,6 +50,26 @@ your LAN, so do not run it on a network you do not trust, and do not port
 forward it to the internet. If you want laptop-only access, set
 `web.host: 127.0.0.1`.
 
+## Voice is not permission
+
+In `wake` mode a dangerous tool is spoken aloud and waits for you to say
+yes - the same gate as the terminal prompt, not a weaker one.
+
+Speaker verification (`docs/voice-id.md`) decides *whose* speech is acted
+on, and it is a filter, not an authentication mechanism: a recording of
+your voice passes. Anyone within earshot of your laptop can be assumed to
+be able to reach the keyboard anyway, so treat voice as convenience, and
+leave `confirm_dangerous_actions` on.
+
+If you would rather nothing act hands-free:
+
+```yaml
+voice:
+  require_enrolled_voice: true   # at minimum, filter to your voice
+safety:
+  blocked_tools: [laptop_power, android_call]
+```
+
 ## Shell access
 
 `laptop.allow_shell: true` gives a 4B model the ability to run any command

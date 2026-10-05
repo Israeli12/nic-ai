@@ -48,6 +48,18 @@ class Transcriber:
         segments, _info = self._load().transcribe(str(path), beam_size=1, vad_filter=True)
         return " ".join(segment.text.strip() for segment in segments).strip()
 
+    def transcribe_samples(self, samples, sample_rate: int = SAMPLE_RATE) -> str:
+        """Transcribe int16 samples already in memory (used by the wake loop)."""
+        from .audio import to_wav_bytes
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+            handle.write(to_wav_bytes(samples, sample_rate))
+            temp_path = Path(handle.name)
+        try:
+            return self.transcribe_file(temp_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
     def record_and_transcribe(self, seconds: float = 6.0) -> str:
         """Record from the default microphone, then transcribe."""
         try:

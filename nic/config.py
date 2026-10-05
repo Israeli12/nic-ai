@@ -97,7 +97,41 @@ class VoiceConfig:
     # Path to a downloaded Piper voice (.onnx).
     piper_voice: str = ""
     piper_path: str = "piper"
+    speak_replies: bool = True
+
+    # --- wake word ---
     wake_word: str = "nic"
+    # Whisper mishears short names, so accept close spellings too.
+    wake_variants: list[str] = field(
+        default_factory=lambda: ["nic", "nick", "nik", "nix", "knick", "nic."]
+    )
+    # "transcript" needs no extra model; "openwakeword" is lighter on CPU
+    # but needs the openwakeword package and a model file.
+    wake_engine: str = "transcript"
+    openwakeword_model: str = ""
+    wake_confidence: float = 0.5
+    # After a reply, keep listening without the wake word for this long.
+    follow_up_seconds: float = 25.0
+    acknowledgement: str = "Yes?"
+
+    # --- voice activity detection ---
+    vad_speech_ratio: float = 3.0
+    vad_floor_minimum: float = 0.012
+    vad_silence_seconds: float = 0.8
+    vad_min_utterance_seconds: float = 0.35
+    vad_max_utterance_seconds: float = 12.0
+
+    # --- speaker verification (only listen to one person) ---
+    # With a voiceprint enrolled, other voices are ignored before they are
+    # even transcribed. See docs/voice-id.md for what this does not do.
+    require_enrolled_voice: bool = True
+    voiceprint: str = "~/nic-ai/voiceprint.npz"
+    # "auto" prefers resemblyzer when installed, else the built-in MFCC one.
+    voice_id_engine: str = "auto"
+    # 0 means "use the threshold chosen during enrollment".
+    speaker_threshold: float = 0.0
+    # Slowly track changes in your voice (a cold, a different mic).
+    adapt_voiceprint: bool = False
 
 
 @dataclass

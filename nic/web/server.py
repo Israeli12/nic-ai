@@ -23,6 +23,22 @@ from ..safety import pending_approval_token
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_BODY_BYTES = 64 * 1024
 
+# Everything the home-screen app needs, mapped to its media type.
+STATIC_ROUTES = {
+    "/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/sw.js": ("sw.js", "text/javascript; charset=utf-8"),
+    "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+}
+ICON_FILES = {
+    "icon-192.png",
+    "icon-512.png",
+    "maskable-192.png",
+    "maskable-512.png",
+    "apple-touch-icon.png",
+    "favicon-32.png",
+}
+
 
 def _local_ip() -> str:
     """Best guess at the LAN address to open on the phone."""
@@ -114,16 +130,20 @@ def make_handler(config: Config, session: Session) -> type[BaseHTTPRequestHandle
             path = self.path.split("?", 1)[0]
             if path in {"/", "/index.html"}:
                 self._serve_static("index.html", "text/html; charset=utf-8")
-            elif path == "/app.css":
-                self._serve_static("app.css", "text/css; charset=utf-8")
-            elif path == "/app.js":
-                self._serve_static("app.js", "text/javascript; charset=utf-8")
             elif path == "/api/health":
                 self._send_json(200, {"ok": True, "model": config.model.name})
+            elif path in STATIC_ROUTES:
+                self._serve_static(*STATIC_ROUTES[path])
+            elif path.startswith("/icons/") and path.count("/") == 2:
+                name = path.rsplit("/", 1)[1]
+                if name in ICON_FILES:
+                    self._serve_static(f"icons/{name}", "image/png", cache_seconds=86400)
+                else:
+                    self._send_json(404, {"error": "not found"})
             else:
                 self._send_json(404, {"error": "not found"})
 
-        def _serve_static(self, name: str, content_type: str) -> None:
+        def _serve_static(self, name: str, content_type: str, cache_seconds: int = 0) -> None:
             file_path = STATIC_DIR / name
             if not file_path.exists():
                 self._send_json(404, {"error": f"missing asset: {name}"})
@@ -132,6 +152,11 @@ def make_handler(config: Config, session: Session) -> type[BaseHTTPRequestHandle
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            if cache_seconds:
+                self.send_header("Cache-Control", f"public, max-age={cache_seconds}")
+            elif name == "sw.js":
+                # A stale service worker would pin an old UI forever.
+                self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             self.wfile.write(body)
 

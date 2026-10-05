@@ -122,6 +122,84 @@ def cmd_listen(args: argparse.Namespace) -> int:
         speaker.say(turn.reply)
 
 
+def cmd_wake(args: argparse.Namespace) -> int:
+    """Always-listening mode: wake word plus owner-voice filtering."""
+    config = load_config(args.config)
+    from .voice import Speaker, Transcriber, VoiceUnavailable
+    from .voiceid import VoiceIdUnavailable
+    from .wake import WakeLoop, load_verifier
+
+    agent = Agent(config, approver=None)
+    try:
+        transcriber = Transcriber(config.voice)
+        speaker = Speaker(config.voice)
+        verifier = load_verifier(config, print) if not args.any_voice else None
+    except (VoiceUnavailable, VoiceIdUnavailable) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if args.any_voice:
+        print("(--any-voice: speaker verification is off for this run)")
+
+    loop = WakeLoop(
+        config,
+        agent=agent,
+        transcriber=transcriber,
+        verifier=verifier,
+        speaker=speaker,
+        on_event=print,
+    )
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        print("\nstopped")
+    finally:
+        loop.stop()
+        if loop.source is not None:
+            loop.source.close()
+    return 0
+
+
+def cmd_enroll(args: argparse.Namespace) -> int:
+    """Record a voiceprint so only you can give commands."""
+    config = load_config(args.config)
+    from .enrollment import run_enrollment
+    from .voiceid import VoiceIdUnavailable
+
+    try:
+        run_enrollment(config, samples_wanted=args.samples, label=args.label)
+    except VoiceIdUnavailable as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("\ncancelled")
+        return 1
+    print("\nNow run: python -m nic wake")
+    return 0
+
+
+def cmd_qr(args: argparse.Namespace) -> int:
+    """Print the web UI address, as a QR code when qrcode is installed."""
+    config = load_config(args.config)
+    from .web.server import _local_ip
+
+    host = _local_ip() if config.web.host in {"0.0.0.0", ""} else config.web.host
+    url = f"http://{host}:{config.web.port}"
+    try:
+        import qrcode
+    except ImportError:
+        print(url)
+        print("\n(pip install qrcode for a scannable code here)")
+        return 0
+    code = qrcode.QRCode(border=1)
+    code.add_data(url)
+    code.make(fit=True)
+    code.print_ascii(invert=True)
+    print(url)
+    if config.web.access_token:
+        print(f"token: {config.web.access_token}")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     from .web.server import serve
@@ -197,6 +275,37 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         except ImportError:
             ok = False
             print("  FAIL pip install faster-whisper sounddevice")
+        try:
+            import sounddevice  # noqa: F401
+
+            print("  ok   microphone backend present")
+        except (ImportError, OSError):
+            ok = False
+            print("  FAIL pip install sounddevice (and check a mic is connected)")
+
+    print("voice id:")
+    from .config import expand as _expand
+
+    voiceprint_path = _expand(config.voice.voiceprint)
+    if voiceprint_path.exists():
+        try:
+            from .voiceid import Voiceprint
+
+            voiceprint = Voiceprint.load(voiceprint_path)
+            print(
+                f"  ok   '{voiceprint.label}' enrolled via {voiceprint.embedder},"
+                f" threshold {voiceprint.threshold}"
+            )
+            if voiceprint.embedder == "mfcc":
+                print("       (pip install resemblyzer and re-enroll for better accuracy)")
+        except Exception as exc:  # noqa: BLE001 - a corrupt print must not hide
+            ok = False
+            print(f"  FAIL could not read {voiceprint_path}: {exc}")
+    elif config.voice.require_enrolled_voice and config.voice.enabled:
+        ok = False
+        print(f"  FAIL no voiceprint at {voiceprint_path}. Run: python -m nic enroll")
+    else:
+        print("  skip no voiceprint enrolled (any voice would be accepted)")
 
     print("web:")
     if not config.web.enabled:
@@ -230,8 +339,26 @@ def build_parser() -> argparse.ArgumentParser:
     listen.add_argument("--seconds", type=float, default=6.0, help="Recording length")
     listen.set_defaults(func=cmd_listen)
 
+    wake = subparsers.add_parser(
+        "wake", help="Always-listening wake-word mode (owner's voice only)"
+    )
+    wake.add_argument(
+        "--any-voice",
+        action="store_true",
+        help="Skip speaker verification for this run",
+    )
+    wake.set_defaults(func=cmd_wake)
+
+    enroll = subparsers.add_parser("enroll", help="Record your voiceprint")
+    enroll.add_argument("--samples", type=int, default=5, help="Clips to record")
+    enroll.add_argument("--label", default="owner", help="Name for this voiceprint")
+    enroll.set_defaults(func=cmd_enroll)
+
     serve = subparsers.add_parser("serve", help="Start the phone-friendly web UI")
     serve.set_defaults(func=cmd_serve)
+
+    qr = subparsers.add_parser("qr", help="Show the web UI address for your phone")
+    qr.set_defaults(func=cmd_qr)
 
     tools = subparsers.add_parser("tools", help="List available tools")
     tools.set_defaults(func=cmd_tools)

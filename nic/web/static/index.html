@@ -5,13 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0f1115" />
 <title>nic-ai</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" />
+<!-- iOS ignores the manifest; these three give it a proper home-screen app. -->
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="nic" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
 <header>
   <h1>nic</h1>
-  <button id="reset" type="button" class="ghost">Clear</button>
+  <div class="header-actions">
+    <button id="mic" type="button" class="ghost" title="Hold to talk" hidden>Talk</button>
+    <button id="reset" type="button" class="ghost">Clear</button>
+  </div>
 </header>
+
+<div id="install" class="install" hidden>
+  <span>Add nic to your home screen?</span>
+  <button id="install-go" type="button">Add</button>
+  <button id="install-no" type="button" class="ghost">Not now</button>
+</div>
 
 <main id="log" aria-live="polite">
   <div class="msg system">Offline assistant. Ask it to do something on your laptop or phone.</div>

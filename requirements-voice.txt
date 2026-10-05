@@ -1,4 +1,14 @@
-# Offline speech-to-text and audio I/O. CPU-only, no network at runtime.
+# Offline speech, wake word, and speaker verification. CPU-only, no network.
+numpy>=1.24
 faster-whisper>=1.0
 sounddevice>=0.4
 soundfile>=0.12
+
+# Optional, much better speaker verification (pulls in torch, ~2 GB):
+# resemblyzer>=0.1.1
+
+# Optional, lower-CPU wake-word detection:
+# openwakeword>=0.6
+
+# Optional, prints a scannable QR for the phone (python -m nic qr):
+# qrcode>=7.4

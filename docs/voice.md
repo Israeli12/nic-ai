@@ -31,9 +31,14 @@ robotic, but zero setup and fully offline.
 ## Use
 
 ```powershell
-python -m nic listen          # press Enter, speak, it acts and replies aloud
+python -m nic enroll          # once: teach it your voice
+python -m nic wake            # always listening, wake word, your voice only
+python -m nic listen          # press Enter, speak - no wake word needed
 python -m nic chat --speak    # type, hear the reply
 ```
+
+`wake` is the hands-free mode: see [wake-word.md](wake-word.md) for how
+it listens and [voice-id.md](voice-id.md) for restricting it to you.
 
 ## Performance on a CPU-only laptop
 
@@ -44,5 +49,6 @@ python -m nic chat --speak    # type, hear the reply
 | `small.en` | ~2 GB | 3-5s |
 
 The model load happens once, on first use, so the first request is slower
-than the rest. Running Whisper and an 8B LLM at once on 8 GB is tight -
+than the rest. In `wake` mode Whisper runs on every utterance that passes
+the speaker check, which is why that check comes first. Running Whisper and an 8B LLM at once on 8 GB is tight -
 pair `tiny.en` with `qwen3:4b` on that hardware.

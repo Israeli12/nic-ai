@@ -116,3 +116,48 @@ def test_unknown_endpoint_is_404(server):
     with pytest.raises(urllib.error.HTTPError) as excinfo:
         post(server, "/api/launch-missiles", {})
     assert excinfo.value.code == 404
+
+
+def get(base, path):
+    with urllib.request.urlopen(base + path, timeout=10) as response:
+        return response.status, response.headers, response.read()
+
+
+def test_manifest_describes_an_installable_app(server):
+    status, headers, body = get(server, "/manifest.webmanifest")
+    manifest = json.loads(body)
+    assert status == 200
+    assert headers["Content-Type"] == "application/manifest+json"
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == "/"
+    sizes = {icon["sizes"] for icon in manifest["icons"]}
+    assert {"192x192", "512x512"} <= sizes
+    assert any(icon.get("purpose") == "maskable" for icon in manifest["icons"])
+
+
+def test_home_screen_icons_are_served(server):
+    for name in ("icon-192.png", "icon-512.png", "apple-touch-icon.png", "maskable-512.png"):
+        status, headers, body = get(server, f"/icons/{name}")
+        assert status == 200
+        assert headers["Content-Type"] == "image/png"
+        assert body.startswith(b"\x89PNG")
+
+
+def test_index_links_the_manifest_and_ios_icon(server):
+    body = get(server, "/")[1 + 1].decode()
+    assert 'rel="manifest"' in body
+    assert 'rel="apple-touch-icon"' in body
+    assert 'name="apple-mobile-web-app-capable"' in body
+
+
+def test_service_worker_is_served_uncached(server):
+    status, headers, body = get(server, "/sw.js")
+    assert status == 200
+    assert headers["Cache-Control"] == "no-cache"
+    assert b"/api/" in body
+
+
+def test_unknown_icon_is_not_served(server):
+    with pytest.raises(urllib.error.HTTPError) as excinfo:
+        get(server, "/icons/../server.py")
+    assert excinfo.value.code == 404

@@ -48,7 +48,9 @@ Fix anything marked `FAIL`, then:
 ```powershell
 python -m nic chat          # terminal
 python -m nic serve         # web UI for your phone
-python -m nic listen        # voice (see docs/voice.md)
+python -m nic enroll        # record your voiceprint (see docs/voice-id.md)
+python -m nic wake          # always listening, wake word (docs/wake-word.md)
+python -m nic qr            # address + QR for the phone
 python -m nic tools         # what it can actually do
 ```
 

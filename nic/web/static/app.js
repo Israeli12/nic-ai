@@ -110,3 +110,74 @@ document.getElementById("reset").addEventListener("click", () => {
     showPending(null);
   });
 });
+
+// --- Home-screen install prompt (Android/Chrome) --------------------------
+const installBar = document.getElementById("install");
+let installPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  if (localStorage.getItem("nic-install-dismissed") !== "1") {
+    installBar.hidden = false;
+  }
+});
+
+document.getElementById("install-go").addEventListener("click", async () => {
+  installBar.hidden = true;
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+});
+
+document.getElementById("install-no").addEventListener("click", () => {
+  installBar.hidden = true;
+  localStorage.setItem("nic-install-dismissed", "1");
+});
+
+// Service workers need a secure context; over plain LAN http this no-ops.
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
+// --- Hold-to-talk, using the phone's own speech recognition ---------------
+// This is the browser's recognizer, not the offline one on the laptop, so it
+// is offered only where the phone supports it and never replaces typing.
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micButton = document.getElementById("mic");
+
+if (SpeechRecognition) {
+  micButton.hidden = false;
+  const recognizer = new SpeechRecognition();
+  recognizer.lang = navigator.language || "en-US";
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+
+  let listening = false;
+  micButton.addEventListener("click", () => {
+    if (listening) {
+      recognizer.stop();
+      return;
+    }
+    try {
+      recognizer.start();
+      listening = true;
+      micButton.textContent = "Stop";
+    } catch (error) {
+      addMessage(`microphone unavailable: ${error.message}`, "error");
+    }
+  });
+
+  recognizer.addEventListener("result", (event) => {
+    const text = event.results[0][0].transcript.trim();
+    if (!text) return;
+    messageInput.value = text;
+    composer.requestSubmit();
+  });
+
+  recognizer.addEventListener("end", () => {
+    listening = false;
+    micButton.textContent = "Talk";
+  });
+}
